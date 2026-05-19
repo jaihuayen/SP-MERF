@@ -1,0 +1,14 @@
+Package: spmerf
+Type: Package
+Title: Semi-Parametric Mixed Effects Random Forest
+Version: 0.1.0
+Author: First Last <first.last@example.com>
+Maintainer: First Last <first.last@example.com>
+Description: Implements SP-MERF, an EM-like algorithm combining random forests and GAMs.
+License: MIT + file LICENSE
+Encoding: UTF-8
+RoxygenNote: 7.2.3
+Imports: 
+    ranger,
+    mgcv,
+    stats
