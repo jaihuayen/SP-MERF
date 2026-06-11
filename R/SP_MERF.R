@@ -7,15 +7,13 @@
 #' @param iter Integer, maximum number of iterations. Default is 100.
 #' @param delta Numeric, convergence threshold. Default is 0.001.
 #' @param ntree Integer, number of trees for the random forest. Default is 500.
-#' @importance Variable importance on the RF part. 
+#' @param num.threads Number of threads for ranger parallelization. Defaults to all available cores.
 #'
 #' @return A list containing the fitted random forest model, the GAM smooth model, predictions, and MSE history.
 #' @export
-#' @importFrom ranger ranger
-#' @importFrom mgcv bam s
-#' @importFrom stats as.formula predict
 SP_MERF <- function(X, y, id, time, iter = 100, delta = 0.001, 
-                    ntree = 500, importance = 'permutation') {
+                    ntree = 500, importance = 'permutation', 
+                    num.threads = 1) {
   
   # 1. Preprocessing
   N <- length(y)
@@ -44,7 +42,8 @@ SP_MERF <- function(X, y, id, time, iter = 100, delta = 0.001,
       formula = rf_formula,
       data = df_internal,
       num.trees = ntree,
-      importance = importance
+      importance = 'none',
+      num.threads = num.threads
     )
     
     # Update population predictions
@@ -59,8 +58,9 @@ SP_MERF <- function(X, y, id, time, iter = 100, delta = 0.001,
     smooth_model <- mgcv::bam(
       residuals ~ s(time, id, bs = "fs"), 
       data = df_internal,
-      method = "fREML", # Fast REML
-      discrete = TRUE   # Discretizes covariates for massive speed boost
+      method = "fREML",
+      discrete = TRUE,
+      nthreads=num.threads
     )
     
     pred_smooth <- as.numeric(predict(smooth_model, newdata = df_internal))
@@ -76,7 +76,22 @@ SP_MERF <- function(X, y, id, time, iter = 100, delta = 0.001,
     }
   }
   
-  # 3. Return objects
+  if (importance != 'none') {
+    cat("Computing final variable importance profiles via single-pass permutation...\n")
+    df_internal$y_adj <- df_internal$y - pred_smooth
+    
+    rf_model <- ranger::ranger(
+      formula = rf_formula,
+      data = df_internal,
+      num.trees = ntree,
+      importance = importance, # Executes permutation math exactly once here
+      num.threads = num.threads
+    )
+    # Sync final population predictions
+    pred_fixed <- predict(rf_model, data = df_internal)$predictions
+  }
+  
+  # 4. Return objects
   results <- list(
     forest = rf_model,
     smooth_model = smooth_model,
