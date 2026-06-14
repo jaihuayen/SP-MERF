@@ -77,7 +77,6 @@ SP_MERF <- function(X, y, id, time, iter = 100, delta = 0.001,
   }
   
   if (importance != 'none') {
-    cat("Computing final variable importance profiles via single-pass permutation...\n")
     df_internal$y_adj <- df_internal$y - pred_smooth
     
     rf_model <- ranger::ranger(
@@ -89,6 +88,10 @@ SP_MERF <- function(X, y, id, time, iter = 100, delta = 0.001,
     )
     # Sync final population predictions
     pred_fixed <- predict(rf_model, data = df_internal)$predictions
+    
+    cat("Convergence reached at iteration", r+1, "\n")
+  } else {
+    cat("Convergence reached at iteration", r, "\n")
   }
   
   # 4. Return objects
