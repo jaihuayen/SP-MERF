@@ -7,18 +7,23 @@
 #' @param iter Integer, maximum number of iterations. Default is 100.
 #' @param delta Numeric, convergence threshold. Default is 0.001.
 #' @param ntree Integer, number of trees for the random forest. Default is 500.
-#' @param num.threads Number of threads for ranger parallelization. Defaults to all available cores.
+#' @param importance Character, importance type for ranger ('none', 'impurity', 'permutation'). Default is 'permutation'.
+#' @param smooth_method Character, smooth estimation engine to use: either \code{"gam"} or \code{"bam"}. Default is \code{"gam"}.
+#' @param num.threads Number of threads for ranger and mgcv parallelization. Defaults to 1.
 #'
 #' @return A list containing the fitted random forest model, the GAM smooth model, predictions, and MSE history.
 #' @export
 SP_MERF <- function(X, y, id, time, iter = 100, delta = 0.001, 
                     ntree = 500, importance = 'permutation', 
-                    num.threads = 1) {
+                    smooth_method = "gam", num.threads = 1) {
   
-  # 1. Preprocessing
+  # 1. Preprocessing & Parameter Validation
   N <- length(y)
   id <- as.factor(id)
   df_internal <- data.frame(y = y, id = id, time = time, X)
+  
+  # Validate and normalize smooth choice
+  smooth_method <- match.arg(tolower(smooth_method), c("gam", "bam"))
   
   # Initialization
   pred_smooth <- rep(0, N) 
@@ -29,7 +34,7 @@ SP_MERF <- function(X, y, id, time, iter = 100, delta = 0.001,
   fixed_vars <- colnames(X)
   rf_formula <- as.formula(paste("y_adj ~", paste(fixed_vars, collapse = " + ")))
   
-  cat("Starting SP-MERF iterations...\n")
+  cat(sprintf("Starting SP-MERF iterations using [%s] for smooth estimation...\n", toupper(smooth_method)))
   
   # 2. EM-like Iterative Loop
   for (r in 1:iter) {
@@ -54,14 +59,23 @@ SP_MERF <- function(X, y, id, time, iter = 100, delta = 0.001,
     df_internal$residuals <- df_internal$y - pred_fixed
     
     # Factor-smooth interaction allows unique non-linear curves per PID
-    # Optimized Smooth Update using bam()
-    smooth_model <- mgcv::bam(
-      residuals ~ s(time, id, bs = "fs"), 
-      data = df_internal,
-      method = "fREML",
-      discrete = TRUE,
-      nthreads=num.threads
-    )
+    if (smooth_method == "gam") {
+      smooth_model <- mgcv::gam(
+        residuals ~ s(time, id, bs = "fs"), 
+        data = df_internal,
+        method = "fREML",
+        nthreads = num.threads
+      )
+    } else {
+      # Optimized Smooth Update using bam() with discretization
+      smooth_model <- mgcv::bam(
+        residuals ~ s(time, id, bs = "fs"), 
+        data = df_internal,
+        method = "fREML",
+        discrete = TRUE,
+        nthreads = num.threads
+      )
+    }
     
     pred_smooth <- as.numeric(predict(smooth_model, newdata = df_internal))
     
@@ -76,6 +90,7 @@ SP_MERF <- function(X, y, id, time, iter = 100, delta = 0.001,
     }
   }
   
+  # 3. Final Importance Calculation Pass
   if (importance != 'none') {
     df_internal$y_adj <- df_internal$y - pred_smooth
     
@@ -88,10 +103,6 @@ SP_MERF <- function(X, y, id, time, iter = 100, delta = 0.001,
     )
     # Sync final population predictions
     pred_fixed <- predict(rf_model, data = df_internal)$predictions
-    
-    cat("Convergence reached at iteration", r+1, "\n")
-  } else {
-    cat("Convergence reached at iteration", r, "\n")
   }
   
   # 4. Return objects
