@@ -62,9 +62,7 @@ SP_MERF <- function(X, y, id, time, iter = 100, delta = 0.001,
     if (smooth_method == "gam") {
       smooth_model <- mgcv::gam(
         residuals ~ s(time, id, bs = "fs"), 
-        data = df_internal,
-        method = "fREML",
-        nthreads = num.threads
+        data = df_internal
       )
     } else {
       # Optimized Smooth Update using bam() with discretization
