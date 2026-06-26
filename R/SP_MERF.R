@@ -8,14 +8,14 @@
 #' @param delta Numeric, convergence threshold. Default is 0.001.
 #' @param ntree Integer, number of trees for the random forest. Default is 500.
 #' @param importance Character, importance type for ranger ('none', 'impurity', 'permutation'). Default is 'permutation'.
-#' @param smooth_method Character, smooth estimation engine to use: either \code{"gam"} or \code{"bam"}. Default is \code{"gam"}.
+#' @param smooth_method Character, smooth estimation engine to use: either \code{"gam"} or \code{"bam"}. Default is \code{"bam"}.
 #' @param num.threads Number of threads for ranger and mgcv parallelization. Defaults to 1.
 #'
 #' @return A list containing the fitted random forest model, the GAM smooth model, predictions, and MSE history.
 #' @export
 SP_MERF <- function(X, y, id, time, iter = 100, delta = 0.001, 
                     ntree = 500, importance = 'permutation', 
-                    smooth_method = "gam", num.threads = 1) {
+                    smooth_method = "bam", num.threads = 1) {
   
   # 1. Preprocessing & Parameter Validation
   N <- length(y)
